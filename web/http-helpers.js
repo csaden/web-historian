@@ -10,23 +10,56 @@ exports.headers = headers = {
   'Content-Type': "text/html"
 };
 
-exports.serveAssets = function(res, asset, callback) {
+// As you progress, keep thinking about what helper functions you can put here!
 
-  var filepath = path.join(__dirname, asset);
-  
-  fs.readFile(filepath, function(err, data) {
-    
-      if (err) { throw err; }
-
-      res.writeHead(200, headers);
-      res.write(data);
-      res.end();
-
-    });
-  // Write some code here that helps serve up your static files!
-  // (Static files are things like html (yours or archived from others...),
-  // css, or anything that doesn't change often.)
-  
+exports.sendResponse = function(res, obj, status) {
+  status = status || 200;
+  res.writeHead(status, headers);
+  res.end(obj);
 };
 
-// As you progress, keep thinking about what helper functions you can put here!
+exports.collectData = function(req, callback) {
+  var data = "";
+  req.on("data", function(chunk) {
+    data += chunk;
+  });
+  req.on("end", function() {
+    // preserve the original data on a post since we are accepting data from a form submission
+    // rather than JSON data as was the case for the chatterbox server
+    callback(data);
+  });
+};
+
+exports.send404 = function(res) {
+  res.sendResponse(res, "404: Page not found", 404);
+};
+
+exports.sendRedirect = function(res, location, status) {
+  status = status || 302;
+  res.writeHead(status, {Location: location});
+  res.end();
+};
+
+exports.serveAssets = function(res, asset, callback) {
+
+  var encoding = {encoding: 'utf-8'};
+
+  // 1. chech in public folder
+  fs.readFile ( archive.paths.siteAssets + asset, encoding, function(err, data) {
+    if (err) {
+      // 2. file doesn't exist in public directory, check archive/sites directory
+      fs.readFile( archive.paths.archivedSites + asset, encoding, function(err, data) {
+        if (err) {
+          // 3. file doesn't exist in either location
+          callback ? callback() : exports.send404(res);
+        } else {
+          // file exists, serve it
+          exports.sendResponse(res, data);
+        }
+      });
+    } else {
+      exports.sendResponse(res, data);
+    }
+  });
+};
+

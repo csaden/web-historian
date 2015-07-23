@@ -1,74 +1,62 @@
 var path = require('path');
 var archive = require('../helpers/archive-helpers');
-var httpHelpers = require('./http-helpers');
+var utils = require('./http-helpers');
 var urlParser = require("url");
-// require more modules/folders here!
 
-exports.handleRequest = function (req, res) {
+var actions = {
+  "GET": function(req, res) {
 
-  var headers = httpHelpers.headers;
-  var parts = urlParser.parse(req.url);
-  var url = parts.pathname.slice(1);
-
-  if (req.method === "GET") {   
-    
-    if (parts.pathname === '/') {
-      httpHelpers.serveAssets(res, "/public/index.html")
-    
-    } else {
-      
-      archive.isUrlArchived(url, function(actuallyArchived) {
-  
-        if (actuallyArchived) {
-          httpHelpers.serveAssets(res, archive.paths.archivedSites + "/" + url);
-    
+    var parts = urlParser.parse(req.url);
+    var urlPath = parts.pathname === "/" ? "/index.html" : parts.pathname;
+    // look inside public and archives/sites directories
+    utils.serveAssets(res, urlPath, function() {
+      // is the urlPath in sites .txt
+      archive.isUrlInList(urlPath.slice(1), function(inList) {
+        if (inList) {
+          // redirect to /loading.html
+          utils.sendRedirect(res, "/loading.html");
         } else {
-          res.writeHead(404);
-          res.write("Not Found! HERE!");
-          res.end();
+          // send404
+          utils.send404(res);
         }
       });
-    }
-  }
-
-  else if (req.method === "POST") {
-
-    var data = '';
-    req.on('data',  function(chunk) {
-      data += chunk;
     });
-    req.on('end', function() {
-      
-      var externalUrl = JSON.parse(data).url;
-      
-      archive.isUrlInList(externalUrl, function(inList) {
+  },
+  "POST": function(req, res) {
+    // must collect data on POST requests
+    utils.collectData(req, function(data) {
+      var url = data.split('=')[1]; // fragile code; should have error handling here
+      // is data in the sites.txt?
+      archive.isUrlInList(url, function(inList) {
 
-        if (inList) {
-          
-          archive.isUrlArchived(externalUrl, function(isArchived) {  
-            if (isArchive) {
-              httpHelpers.serveAssets(res, archive.paths.archivedSites + "/" + externalUrl);
-            } else {
-              headers["Location"] = "http://127.0.0.1:8080/public/loading.html";
-              res.writeHead(302, headers);
-              res.end();
+        if (inList) { // if yes
+          //is it archived?
+          archive.isUrlArchived(url, function(archived) {
+            if (archived) { // if yes
+              // display the page
+              utils.sendRedirect(res, '/' + url);
+            } else { // if no
+              // serve loading.html
+              utils.sendRedirect(res, "/loading.html");
             }
           });
-
-        } else {
-
-          archive.addUrlToList(externalUrl, function() {
-            // headers["Location"] = "http://127.0.0.1:8080/public/loading.html";
-            res.writeHead(302, headers);
-            res.end();
+        } else { // if no
+          // append url to site.txt
+          archive.addUrlToList(url, function() {
+            // redirect to loading.html
+            utils.sendRedirect(res, '/loading.html');
           });
-
         }
       });
     });
   }
-  // THIS IS PROBABLY IMPORTANT DON'T FORGET ABOUT IT
-  //res.end(archive.paths.list);
-
 };
 
+exports.handleRequest = function(req, res) {
+  var action = actions[req.method];
+  if (action) {
+    action(req, res);
+  } else {
+    utils.send404(res);
+  }
+};

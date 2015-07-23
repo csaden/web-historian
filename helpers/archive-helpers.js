@@ -27,18 +27,17 @@ exports.initialize = function(pathsObj){
 // modularize your code. Keep it clean!
 
 exports.readListOfUrls = function(cb){
-  fs.readFile(exports.paths.list, "utf-8", function(error, data) {
-    if (error) { throw error; }
-    var fileContents = data.toString().split("\n");
-    cb(fileContents);
+  fs.readFile(exports.paths.list, "utf-8", function(err, sites) {
+    if (err) { throw err; }
+    sites = sites.toString().split("\n");
+    if (callback) { cb(sites); }
   });
-
 };
 
 exports.isUrlInList = function(url, cb){
   exports.readListOfUrls(function(urls) {
-    var result = _.contains(urls, url);
-    cb(result);
+    var isInList = _.contains(urls, url);
+    cb(isInList);
   });
 };
 
